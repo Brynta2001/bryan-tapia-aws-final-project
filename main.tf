@@ -3,96 +3,50 @@ provider "aws" {
   shared_credentials_files = ["~/.aws/credentials"]
 }
 
-resource "aws_vpc" "fis_vpc" {
-  cidr_block = "10.10.0.0/16"
+module "vpc" {
+  source = "./modules/vpc"
 }
 
-resource "aws_subnet" "public_subnet" {
-  cidr_block = "10.10.1.0/24"
-  vpc_id     = aws_vpc.fis_vpc.id
+module "subnet" {
+  source = "./modules/subnet"
+  vpc_id = module.vpc.fis_vpc_id
 }
 
-resource "aws_subnet" "private_subnet" {
-  cidr_block = "10.10.2.0/24"
-  vpc_id     = aws_vpc.fis_vpc.id
+module "security_group" {
+  source     = "./modules/security_group"
+  fis_vpc_id = module.vpc.fis_vpc_id
 }
 
-resource "aws_internet_gateway" "fis_public_internet_gateway" {
-  vpc_id = aws_vpc.fis_vpc.id
+module "network_interface" {
+  source           = "./modules/network_interface"
+  subnet_id        = module.subnet.subnet_id
+  web_server_sg_id = module.security_group.web_server_sg_id
 }
 
-resource "aws_route_table" "fis_public_subnet_route_table" {
-  vpc_id = aws_vpc.fis_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.fis_public_internet_gateway.id
-  }
-
-  route {
-    ipv6_cidr_block = "::/0"
-    gateway_id      = aws_internet_gateway.fis_public_internet_gateway.id
-  }
+module "ec2_instances" {
+  source                    = "./modules/ec2_instances"
+  aeis_network_interface_id = module.network_interface.aeis_network_interface_id
+  aeis_network_interface_private_ips = module.network_interface.aeis_network_interface_private_ips
+  depends_on = [ module.network_interface ]
 }
 
-resource "aws_route_table_association" "fis_public_association" {
-  route_table_id = aws_route_table.fis_public_subnet_route_table.id
-  subnet_id      = aws_subnet.public_subnet.id
+module "ecr" {
+  source = "./modules/ecr"
 }
 
-resource "aws_security_group" "web_server_sg" {
-  vpc_id = aws_vpc.fis_vpc.id
-
-  ingress {
-    description = "Allow HTTP inbound traffic"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Allow HTTPS inbound traffic"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    description      = "Allow all outbound traffic"
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  tags = {
-    Name = "aeis security group"
-  }
+output "public_ip" {
+  value = module.ec2_instances.public_aeis_ip
+  description = "Public IP of the EC2 instance"
 }
 
-# Datablock: Se utiliza para definir información específica que es extensa
-
-data "aws_ami" "ubuntu" {
-  most_recent = "true"
-  filter {
-    name   = "OS Name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"]
+output "private_ip" {
+  value = module.ec2_instances.private_aeis_ip
+  description = "Private IP of the EC2 instance"
 }
 
-resource "aws_instance" "fis_ubuntu_instance" {
-  ami           = data.aws_ami.ubuntu.id
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.public_subnet.id
-
+output "url_ecr_repository_aeis" {
+  value = module.ecr.url_ecr_repository_aeis
+  description = "URL of the ECR repository"
 }
+
+# Deber: que todo tenga un nombre

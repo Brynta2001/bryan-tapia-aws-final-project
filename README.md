@@ -7,6 +7,11 @@ This is the final project of the AWS Course that uses Terraform to create a VPC 
 - Terraform
 - AWS Account
 
+## Glosary
+
+Naming convention for the resources:
+<https://www.terraform-best-practices.com/naming>
+
 ## Usage
 
 1. Clone the repository

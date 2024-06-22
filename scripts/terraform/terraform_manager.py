@@ -1,0 +1,1 @@
+class Terraform_Manager:
